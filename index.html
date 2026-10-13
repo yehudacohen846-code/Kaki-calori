@@ -431,7 +431,7 @@ let aiCtl=null;
 function aiCancel(){if(aiCtl){aiCtl.cancelled=true;aiCtl.abort&&aiCtl.abort()}}
 window.aiCancel=aiCancel;
 async function callClaude(content,o={}){
-  const {maxTokens=1000,timeout=60000,onStatus=()=>{},parse=t=>t}=o;
+  const {json=true,maxTokens=1000,timeout=60000,onStatus=()=>{},parse=t=>t}=o;
   const s=db.settings;
   const primary=s.model||DEF_MODEL;
   const models=[primary,primary];
@@ -448,7 +448,7 @@ async function callClaude(content,o={}){
       r=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",signal:ctl.signal,
         headers:{"content-type":"application/json","x-api-key":s.key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model,max_tokens:maxTokens,messages:[{role:"user",content}]})
+        body:JSON.stringify(Object.assign({model,max_tokens:maxTokens,messages:[{role:"user",content}]},json?{system:"You are a nutrition estimation API. Reply with ONE valid JSON object only: no prose, no markdown, no code fences. Always estimate, even from a partial or unclear image; never ask questions or refuse. If there is truly no food, return calories 0."}:{}))
       });
       j=await r.json().catch(()=>({}));
     }catch(e){
@@ -480,7 +480,7 @@ async function callClaude(content,o={}){
 }
 function parseJSONText(t){
   try{return JSON.parse(t)}catch(e){}
-  const m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error("תשובה לא צפויה מהמודל");
+  const m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error("תשובה לא צפויה מהמודל: "+t.replace(/\s+/g," ").slice(0,140));
   return JSON.parse(m[0]);
 }
 const parseMeal=t=>{const o=parseJSONText(t);if(!isFinite(Number(o.calories)))throw new Error("בתשובה חסרות קלוריות");return o};
@@ -918,7 +918,7 @@ $("aiGo").onclick=()=>{
   const sum=aiSummary(insDays);
   if(sum.days.filter(d=>d.meals.length).length<2){alert("צריך לפחות יומיים עם רישום ארוחות");return}
   const prompt='אתה מאמן תזונה תומך וישר. להלן נתוני '+insDays+' הימים האחרונים של משתמש באפליקציית מעקב קלוריות (JSON). נתח את דפוסי האכילה, הזמנים, חלוקת הארוחות, החלבון, האימונים ומגמת המשקל, והחזר בעברית: (1) שלושה דברים שהולכים טוב, (2) שלושה דברים לשיפור עם צעד מעשי וקונקרטי לכל אחד, (3) משפט אחד על קצב ההתקדמות לעבר היעד. כתוב בטון חם וישיר, עד 230 מילים, בלי הקדמה, בלי כוכביות ובלי עיצוב מיוחד, עם "•" לפני כל נקודה. אל תאבחן מחלות ואל תמליץ על תוספים או תרופות, ואל תמליץ על אכילה מתחת ל-1200 קלוריות. אם הנתונים מעטים או נראים חלקיים, ציין זאת בקצרה. הנתונים:\n'+JSON.stringify(sum);
-  runAI("aiNote","מנתח את הנתונים",st=>callClaude([{type:"text",text:prompt}],{maxTokens:1400,timeout:40000,onStatus:st,parse:t=>{const x=t.replace(/\*\*/g,"").replace(/^\s*[\*\-]\s+/gm,"• ").trim();if(x.length<30)throw new Error("תשובה קצרה מדי");return x}}),
+  runAI("aiNote","מנתח את הנתונים",st=>callClaude([{type:"text",text:prompt}],{json:false,maxTokens:1400,timeout:40000,onStatus:st,parse:t=>{const x=t.replace(/\*\*/g,"").replace(/^\s*[\*\-]\s+/gm,"• ").trim();if(x.length<30)throw new Error("תשובה קצרה מדי");return x}}),
     text=>{db.aiNote={ts:Date.now(),n:insDays,text};save();renderInsights()});
 };
 
