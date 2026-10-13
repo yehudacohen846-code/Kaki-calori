@@ -302,7 +302,7 @@ svg text{fill:var(--mut);font-size:10px}
     <input id="key" type="password" placeholder="sk-ant-..." autocomplete="off">
     <div class="mut" style="margin-top:6px">נכנסים ל-console.anthropic.com, פותחים חשבון, טוענים קרדיט (Billing), יוצרים מפתח ב-API Keys ומעתיקים לכאן. הזיהוי מתמונה ומטקסט נעשה ע״י Claude.</div>
     <label>דגם</label>
-    <input id="model" placeholder="claude-haiku-5-5">
+    <input id="model" placeholder="claude-sonnet-5-5">
   </div>
   <div class="card">
     <b>פרטים אישיים</b>
@@ -368,8 +368,9 @@ let db;
 try{db=JSON.parse(localStorage.getItem(DB_KEY))}catch(e){}
 function ensureDB(){
   db=db||{};
-  db.settings=Object.assign({goal:2000,start:null,target:null,key:"",model:"claude-haiku-5-5",wpct:1},db.settings||{});
-  if(/gemini/i.test(db.settings.model||"")||/^AIza/.test(db.settings.key||"")){db.settings.model="claude-haiku-5-5";db.settings.key=""}
+  db.settings=Object.assign({goal:2000,start:null,target:null,key:"",model:"claude-sonnet-5-5",wpct:1},db.settings||{});
+  if(/gemini/i.test(db.settings.model||"")||/^AIza/.test(db.settings.key||"")){db.settings.model="claude-sonnet-5-5";db.settings.key=""}
+  if(db.settings.mv!==2){db.settings.mv=2;db.settings.model="claude-sonnet-5-5"}
   db.meals=db.meals||[];db.weights=db.weights||[];db.water=db.water||{};db.badges=db.badges||[];db.workouts=db.workouts||[];
 }
 ensureDB();
@@ -425,21 +426,21 @@ function thumb(dataUrl){
 }
 
 // ===== קריאה ל-Claude: ניסיונות חוזרים, דגם חלופי, מגבלת זמן, ביטול =====
-const DEF_MODEL="claude-haiku-5-5",FALLBACK_MODEL="claude-sonnet-5-5";
+const DEF_MODEL="claude-sonnet-5-5";
 let aiCtl=null;
 function aiCancel(){if(aiCtl){aiCtl.cancelled=true;aiCtl.abort&&aiCtl.abort()}}
 window.aiCancel=aiCancel;
 async function callClaude(content,o={}){
-  const {maxTokens=1000,timeout=25000,onStatus=()=>{},parse=t=>t}=o;
+  const {maxTokens=1000,timeout=60000,onStatus=()=>{},parse=t=>t}=o;
   const s=db.settings;
   const primary=s.model||DEF_MODEL;
-  const models=[primary,primary,primary!==FALLBACK_MODEL?FALLBACK_MODEL:primary];
+  const models=[primary,primary];
   const ctx=aiCtl={cancelled:false,abort:null};
   let lastErr=new Error("לא התקבלה תשובה");
   for(let i=0;i<models.length;i++){
     if(ctx.cancelled)throw new Error("בוטל");
     const model=models[i];
-    onStatus("ניסיון "+(i+1)+" מתוך "+models.length+(i===2&&model!==primary?" · דגם חזק יותר":""));
+    onStatus(i?"ניסיון נוסף ("+lastErr.message+")":"");
     const ctl=new AbortController();ctx.abort=()=>ctl.abort();
     const to=setTimeout(()=>ctl.abort(),timeout);
     let r,j;
@@ -463,8 +464,7 @@ async function callClaude(content,o={}){
       if(r.status===401)throw new Error("המפתח לא תקין (401). בדוק שהעתקת אותו מלא בהגדרות");
       if(r.status===403)throw new Error("למפתח אין הרשאה (403): "+m.slice(0,100));
       if(r.status===404){
-        if(i===2&&model!==primary){lastErr=new Error("הדגם החלופי לא זמין");continue}
-        if(model===primary)throw new Error("הדגם '"+model+"' לא נמצא, שנה את שם הדגם בהגדרות");
+        throw new Error("הדגם '"+model+"' לא נמצא, שנה את שם הדגם בהגדרות");
       }
       if(r.status===400||r.status===413)throw new Error("הבקשה נדחתה ("+r.status+"): "+m.slice(0,120));
       lastErr=new Error(r.status===429?"יותר מדי בקשות בזמן קצר (429), נסה שוב בעוד דקה":(r.status>=500||r.status===529)?"השרת של Claude עמוס כרגע ("+r.status+")":"שגיאה "+r.status+": "+m.slice(0,100));
